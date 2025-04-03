@@ -12,19 +12,22 @@ CHAT_ID = "-1002646957870"
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # URL de la API de Deriv
-DERIV_API_URL = "https://api.deriv.com/v2/"
-ASSETS = {"Boom 1000 Index": "R_100", "Crash 1000 Index": "R_100"}
-
+DERIV_API_URL = "https://api.deriv.com/v2/ticks/history"
+ASSETS = {"boom_1000": "BOOM_1000", "crash_1000": "CRASH_1000"}
 
 def obtener_datos(simbolo, num_velas=700):
     """Obtiene datos históricos desde la API de Deriv."""
-    asset_id = ASSETS.get(simbolo)
-    if not asset_id:
+    if simbolo not in ASSETS:
         print(f"⚠️ Activo {simbolo} no encontrado en la API de Deriv.")
         return pd.DataFrame()
     
-    url = f"{DERIV_API_URL}ticks/history?symbol={asset_id}&count={num_velas}&granularity=60"  # M1
-    response = requests.get(url)
+    params = {
+        "symbol": ASSETS[simbolo],
+        "count": num_velas,
+        "granularity": 60,  # Temporalidad M1
+        "end": "latest"
+    }
+    response = requests.get(DERIV_API_URL, params=params)
     
     if response.status_code != 200:
         print(f"⚠️ Error al obtener datos de {simbolo}: {response.status_code}")
@@ -40,7 +43,6 @@ def obtener_datos(simbolo, num_velas=700):
     df['time'] = pd.to_datetime(df['time'], unit='s')
     return df
 
-
 def calcular_indicadores(df):
     """Calcula RSI, Momentum y EMAs."""
     df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
@@ -55,11 +57,10 @@ def calcular_indicadores(df):
     
     return df
 
-
 def analizar_mercado():
     """Analiza el mercado y envía señales a Telegram."""
     print("🔍 Analizando mercado...")
-    for simbolo, direccion in [('Boom 1000 Index', 'compra'), ('Crash 1000 Index', 'venta')]:
+    for simbolo, direccion in [("boom_1000", "compra"), ("crash_1000", "venta")]:
         print(f"🔍 Ejecutando análisis para {simbolo}")
         
         df = obtener_datos(simbolo)
@@ -77,7 +78,6 @@ def analizar_mercado():
             mensaje = f"📈 Señal de {direccion.upper()} en {simbolo}\n\nPrecio: {df['close'].iloc[-1]}\nRSI: {df['rsi'].iloc[-1]:.2f}\nMomentum: {df['momentum'].iloc[-1]:.2f}"
             print(f"✅ Enviando señal: {mensaje}")
             bot.send_message(CHAT_ID, mensaje)
-
 
 # Programar ejecución cada 10 minutos
 schedule.every(10).minutes.do(analizar_mercado)
